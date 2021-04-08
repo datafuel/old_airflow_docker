@@ -1,0 +1,68 @@
+name: Docker
+
+on:
+  push:
+    # Publish `main` as Docker `latest` image.
+    branches:
+      - main
+
+    # Publish `v1.2.3` tags as releases.
+    tags:
+      - v*
+
+
+env:      
+  # DOCKER_REGISTRY: kemansel.azurecr.io      
+  DOCKER_IMAGE: youssubuntu/airflow:latest      
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}  
+  DOCKER_TARGET_PLATFORM: linux/arm/v7
+
+jobs:
+  # Push image to GitHub Packages.
+  # See also https://docs.docker.com/docker-hub/builds/
+  
+  buildx:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      
+        # https://github.com/docker/setup-qemu-action
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      # https://github.com/docker/setup-buildx-action
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      # - name: Cache Docker layers
+      #   uses: actions/cache@v2
+      #   id: cache
+      #   with:
+      #     path: /tmp/.buildx-cache
+      #     key: ${{ runner.os }}-buildx-${{ github.sha }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-buildx-
+
+      - name: Docker Buildx (build)
+        run: |
+          pwd && ls && docker buildx build \
+            --platform linux/arm64 \
+            --output "type=image,push=false" \
+            --tag ${{ env.DOCKER_IMAGE }} \
+            --file airflow_dir/Dockerfile ./
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Docker Buildx (push)
+        run: |
+          docker buildx build \
+            --platform linux/arm64 \
+            --output "type=image,push=true" \
+            --tag ${{ env.DOCKER_IMAGE }} \
+            --file airflow_dir/Dockerfile ./
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ${{ env.DOCKER_IMAGE }}
